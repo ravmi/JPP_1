@@ -17,13 +17,12 @@ trzeba ladnie stwierdzic czy jezyk jest pusty
 Nie musi zawierac pustego
 [DONE]
 
-Jak z konktatenacja z epsem
-Glowny problem: simpl i der
-    use nub in simp
-    funkcja, ktora wyciaga znak na poczatek (dla der)
+Jak z konktatenacja z epsem [DONE]
+Glowny problem: simpl i der [DONE]
+    use nub in simp pDONE]
+    funkcja, ktora wyciaga znak na poczatek (dla der) [DPONE]
 
-Jak spłaszczyć drzewo
-
+Napraw Empty != Eps
 
 
 
