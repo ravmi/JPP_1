@@ -1,0 +1,116 @@
+TODO START
+-------------------
+
+czy assoc to zwykla konkatenacja????
+[DONE]
+
+czy search dziala w czasie match * |w| - zakładam, ze tak
+[DONE]
+
+use some checkers for haskell (style and code shortenings)
+[DONE]
+
+uwaga na slowo puste i pusty jezyk
+trzeba ladnie stwierdzic czy jezyk jest pusty
+[DONE] przez skracanie konkatenacji
+
+Nie musi zawierac pustego
+[DONE]
+
+Jak z konktatenacja z epsem
+Glowny problem: simpl i der
+    use nub in simp
+    funkcja, ktora wyciaga znak na poczatek (dla der)
+
+Jak spłaszczyć drzewo
+
+
+
+
+
+
+
+
+
+TODO DONE
+---------------------------
+simpl Lit c = Lit c
+simpl Reg (Reg x :> Reg y) :> Reg z = Reg 
+Po pierwsze: Konkatenacje i alternatywe kierujemy w prawo
+(wiec jesli mamy ciag to bedzie takie drzewo zredukowane do listy)
+degenerate
+na alternatywie definiujemy funkcje toList i fromList
+zeby zredukowac alternatywe zakladamy, ze wszystkie lewe dzieci juz sa zredukowane(odapalamy na nich funkcje)
+potem robimy toList, nub i fromList
+
+zeby zredukowac konkatenacje
+robimy degenerate, usuwamy wszystkie epsilony i jesli sasiadujemy z gwiazdka i jest rowna to tez usuwamy, odpowiednik funkcji nub
+
+
+TODOLIST
+przeczytaj post na fb o specyfikacji
+przemysl simpla (ogarnij case'y)
+zaklep gowniane funkcje
+
+
+zaklepac:
+instance (Eq c) => Equiv (Reg c) where
+    zwrotną, symetryczną i przechodnią
+    ma przechodzic equiv
+
+leftUnit x = m1 <> x === x
+rightUnit x = x <> m1 === x
+assoc x y z = (x<>y)<>z === x<>(y<>z)
+    jest w testreg
+
+nullable:: Reg c -> Bool
+empty :: Reg c -> Bool
+
+simpl :: Eq c => Reg c -> Reg c
+
+BASEDONSIMPL:
+der :: Eq c => c -> Reg c -> Reg c
+ders :: Eq c => [c] -> Reg c -> Reg c
+
+co to? Uwaga: nie od rzeczy może być tu wykorzystanie funkcji simpl. Jaki rozmiar
+ma ders (replicate 1000 A) (Many (Lit A) :> Lit B) ?
+
+
+based on ders:
+accepts :: Eq c => Reg c -> [c] -> Bool
+mayStart :: Eq c => c -> Reg c -> Bool
+match :: Eq c => Reg c -> [c] -> Maybe [c]
+search :: Eq c => Reg c -> [c] -> Maybe [c]
+findall :: Eq c => Reg c -> [c] -> [[c]]
+
+rozwiązania skrajnie nieefektywne będą karane; przy porządnym rozwiąza-
+niu testy przechodzą w ok 1s. Rozwiązanie, gdzie będzie to trwało ponad
+2minuty uznamy za nieefektywne.
+
+
+
+
+
+
+1. "search r w daje Just u gdzie u to pierwsze (najdłuższe) podsłowo w akceptowane przez r, Nothing gdy nie ma takiego."
+Czy dobrze rozumiem, że search ma zwracać pierwsze spośród najdłuższych podsłów akceptowanych?
+Tzn. dla
+search (string "ab" :| string "bcd") "abcde"
+mamy otrzymać
+Just "bcd" ?
+Odp:
+Spośród dopasowań zaczynających się na najwcześniejszej pozycji wybieramy najdłuższe dopasowanie. Czyli w Pana przykładzie Just "ab"
+2. "findall r w daje listę wszystkich (lokalnie najdłuższych) podsłów w pasujących do r."
+Czy mamy na myśli listę z najdłuższym akceptowanym prefiksem dla każdego sufiksu? I czy pomijamy sufiks pusty?
+Tzn. dla
+findall (Many (Lit 'a' :> Lit 'b')) "aabab"
+mamy otrzymać
+["","abab","","ab",""] ?
+Odp:
+Niech many1 r = r :> Many r
+Intencja była taka, żeby dla findall (many1 (Lit 'a' :> Lit 'b')) "aabab" otrzymać wynik ["abab"].
+Wyrażenia do których pasuje słowo puste są trudniejszymi przykładami, bo słowo puste wystepuje na każdej pozycji (ale nie wszędzie jest lokalnie najdłuższym dopasowaniem).
+U mnie 
+findall (Many (Lit 'a' :> Lit 'b')) "aabab" 
+daje ["", "abab"] - słowo puste na początku tekstu (nie da się go przedłużyć do pasującego fragmentu tekstu, więc jest lokalnie najdłuższe). W każdym innnym punkcie tekstu słowo puste da się przedłuzyć do dłuższego dopasowania.
+
