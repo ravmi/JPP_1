@@ -9,13 +9,14 @@ infix 4 ===
 class Equiv a where
   (===) :: a -> a -> Bool
 
+---
+
 instance (Eq c) => Equiv (Reg c) where
    r1 === r2 = (simpl r1) == (simpl r2)
 
--- todo
 instance Mon (Reg c) where
-  m1 = Empty
-  x <> y = Empty -- simpl $ (simpl x) :> (simpl y)
+  m1 = Eps
+  x <> y = x :> y
   
 simpl :: Eq c => Reg c -> Reg c
 simpl (x :> y) = fromList $ fixList $ map simpl $ (toList x) ++ toList y where
@@ -23,17 +24,19 @@ simpl (x :> y) = fromList $ fixList $ map simpl $ (toList x) ++ toList y where
     toList (x :> y) = (toList x) ++ (toList y)
     toList x = [x]
 
-    -- mozna usuwac ,jesli obok jest many takei samo[wazne]
     fixList :: Eq c => [Reg c] -> [Reg c]
-    fixList = cleanEps . cleanEmpty
+    fixList = cleanEps . checkEmpty
 
-    cleanEmpty :: Eq c => [Reg c] -> [Reg c]
-    cleanEmpty = filter (/=Empty)
+    checkEmpty :: Eq c => [Reg c] -> [Reg c]
+    checkEmpty l
+        | any empty l = []
+        | otherwise = l
 
     cleanEps :: Eq c => [Reg c] -> [Reg c]
+    cleanEps [] = []
     cleanEps l
-        | all (Eps==) l = [Eps]
-        | otherwise = filter (/=Eps) l
+        | all equalsEps l = [Eps]
+        | otherwise = filter (not . equalsEps) l
 
     fromList :: [Reg c] -> Reg c
     fromList [] = Empty
@@ -45,9 +48,6 @@ simpl (x :| y) = fromList $ fixList $ map simpl $ (toList x) ++ toList y where
     toList (x :| y) = (toList x) ++ (toList y)
     toList x = [x]
 
-    -- mozna dodac, ze usuwamy a, aa itd, jesli jest many a
-    -- mozna dodac clean eps
-    -- mozna usunac epsy, jesli jest Many (łatwe!)
     fixList :: Eq c => [Reg c] -> [Reg c]
     fixList = nub . cleanEmpty
 
@@ -59,54 +59,112 @@ simpl (x :| y) = fromList $ fixList $ map simpl $ (toList x) ++ toList y where
     fromList [x] = x
     fromList (x:xs) = x :| (fromList xs)
 
-simpl (Many Eps) = Eps
-simpl (Many Empty) = Empty
-simpl (Many x) = Many (simpl x)
+simpl (Many x)
+    | (equalsEps x) || (empty x) = Eps
+    | otherwise = Many (simpl x)
 simpl x = x
+
 
 nullable :: Reg c -> Bool
 nullable (x :| y) = (nullable x) || (nullable y)
+nullable (x :> y)= (nullable x) && (nullable y)
+nullable (Many x) = True
 nullable Eps = True
-nullable x = False
+nullable Empty = False
+nullable (Lit x) = False
+
+
+-- Is the argument regex that accepts only Eps?
+equalsEps :: Reg c -> Bool
+equalsEps Eps = True
+equalsEps (x :> y) = equalsEps x && equalsEps y
+equalsEps (x :| y) = (epsx && epsy) || (epsx && emptyy) || (emptyx && epsy) where
+    emptyx = empty x
+    emptyy = empty y
+    epsx = equalsEps x
+    epsy = equalsEps y
+equalsEps (Many x) = (equalsEps x) || (empty x)
+equalsEps (Lit x) = False
+equalsEps Empty = False
+
 
 empty :: Reg c -> Bool 
+empty (x :> y) = (empty x) || (empty y)
+empty (x :| y) = (empty x) && (empty y)
+empty (Many x) = False
 empty Empty = True
 empty r = False
 
--- pomyslec nad optymalizacja zemy tak nie spamowac simplem (mozna upsrawnic ders,
--- tylko obtoczys dwoma simplami)
--- nie rozumiem kiedyz uzywac epsa, a kiedy empyty
+
+-- simpl format has some properties:
+-- both :> and :| "go to the right"
+-- there are no Eps in :>
+-- there are no Many Empty
+-- tere are no Many Eps
 der :: Eq c => c -> Reg c -> Reg c
-der c = simpl . (der' c) . simpl  where
-    der' :: Eq c => c -> Reg c -> Reg c
-    der' c ((Lit x) :> y)
-        | x == c = y
-        | otherwise = Empty
-    -- to pisalem szybko, moze byc blad gdzies - popraweione
-    der' c ((Many x) :> y) = der' c $ x :> (Many x) :> y
-    der' c (x :| y) = (der' c x) :| (der' c y)
-    der' c (Many x) = der' c $ x :> (Many x)
-    der' c Empty = Empty
-    der' c Eps = Empty
+der c r = cutFirst c $ simpl r
+cutFirst :: Eq c => c -> Reg c -> Reg c
+cutFirst c Empty = Empty
+cutFirst c Eps = Empty
+cutFirst c (Lit x) = Empty
+cutFirst c (Many x)
+    | equalsEps cutx = Many x
+    | nullable cutx = cutx :> (Many x)
+    | otherwise = Empty where
+    cutx = cutFirst c x
+cutFirst c (x :| y) = simpl $ cutFirst c x :| (cutFirst c y)
+cutFirst c (x :> y)
+    | equalsEps cutx = y
+    | nullable cutx = cutx :> y
+    | otherwise = Empty
+    where
+    cutx = cutFirst c x
 
 -- foldl czy foldr
+-- posprawdzac funkcje, ktore nie maja eq, wiec nie sa simply
 ders :: Eq c => [c] -> Reg c -> Reg c
-ders l r = foldl (flip der) r l
+ders l r = simpl $ foldl (flip der) r l
 
 accepts :: Eq c => Reg c -> [c] -> Bool
-accepts r w = nullable $ ders w r
+accepts r [] = nullable r
+accepts r w = nullable $ ders y x
+    where 
+    x = r
+    y = w
 
 mayStart :: Eq c => c -> Reg c -> Bool
 mayStart c r = not $ empty $ der c r
 
 match :: Eq c => Reg c -> [c] -> Maybe [c]
-match r w = Nothing
+match r w
+    | found /= [] = Just found
+    | nullable r = Just []
+    | otherwise = Nothing
+    where
+    found = match' r w
+
+match' :: Eq c => Reg c -> [c] -> [c]
+match' r [] = []
+match' r (x:xs)
+    | nullable reduced = x:(match' reduced xs)
+    | otherwise = [] where
+            reduced = der x r
+
+suffixes :: Eq c => [c] -> [[c]]
+suffixes [] = [[]]
+suffixes l = l : (tails (tail l))
 
 search :: Eq c => Reg c -> [c] -> Maybe [c]
-search r w = Nothing
+search r w = foldl (sumMaybe) Nothing $ map (match r) (suffixes w) where
+    sumMaybe Nothing l = l
+    sumMaybe l Nothing = l
+    sumMaybe (Just l1) (Just l2) = Just (l1 ++ l2)
+
 
 findall :: Eq c => Reg c -> [c] -> [[c]]
 findall r w = []
+
+---
 
 char :: Char -> Reg Char
 char = Lit
