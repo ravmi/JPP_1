@@ -1,7 +1,3 @@
---okomentuj funkcje
---sprawdz sygnatury funkcji
---czy usuwac funkcje
---sprawdz styl
 module RegExtra where
 import Mon
 import Reg
@@ -19,9 +15,9 @@ instance (Eq c) => Equiv (Reg c) where
 instance Mon (Reg c) where
   m1 = Eps
   x <> y = x :> y
-  
+
 simpl :: Eq c => Reg c -> Reg c
-simpl (x :> y) = fromList $ fixList $ map simpl $ (toList x) ++ toList y 
+simpl (x :> y) = fromList $ fixList $ map simpl $ (toList x) ++ toList y
     where
     toList :: Reg c -> [Reg c]
     toList (x :> y) = (toList x) ++ (toList y)
@@ -45,7 +41,7 @@ simpl (x :> y) = fromList $ fixList $ map simpl $ (toList x) ++ toList y
     fromList [] = Empty
     fromList [x] = x
     fromList (x:xs) = x :> (fromList xs)
-simpl (x :| y) = fromList $ fixList $ map simpl $ (toList x) ++ toList y 
+simpl (x :| y) = fromList $ fixList $ map simpl $ (toList x) ++ toList y
     where
     toList :: Reg c -> [Reg c]
     toList (x :| y) = (toList x) ++ (toList y)
@@ -56,7 +52,7 @@ simpl (x :| y) = fromList $ fixList $ map simpl $ (toList x) ++ toList y
 
     cleanEmpty :: Eq c => [Reg c] -> [Reg c]
     cleanEmpty = filter (not . empty)
-     
+
     fromList :: [Reg c] -> Reg c
     fromList [] = Empty
     fromList [x] = x
@@ -88,7 +84,7 @@ equalsEps (Many x) = (equalsEps x) || (empty x)
 equalsEps (Lit x) = False
 equalsEps Empty = False
 
-empty :: Reg c -> Bool 
+empty :: Reg c -> Bool
 empty (x :> y) = (empty x) || (empty y)
 empty (x :| y) = (empty x) && (empty y)
 empty (Many x) = False
