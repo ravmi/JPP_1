@@ -1,3 +1,7 @@
+--okomentuj funkcje
+--sprawdz sygnatury funkcji
+--czy usuwac funkcje
+--sprawdz styl
 module RegExtra where
 import Mon
 import Reg
@@ -19,7 +23,8 @@ instance Mon (Reg c) where
   x <> y = x :> y
   
 simpl :: Eq c => Reg c -> Reg c
-simpl (x :> y) = fromList $ fixList $ map simpl $ (toList x) ++ toList y where
+simpl (x :> y) = fromList $ fixList $ map simpl $ (toList x) ++ toList y 
+    where
     toList :: Reg c -> [Reg c]
     toList (x :> y) = (toList x) ++ (toList y)
     toList x = [x]
@@ -43,7 +48,8 @@ simpl (x :> y) = fromList $ fixList $ map simpl $ (toList x) ++ toList y where
     fromList [x] = x
     fromList (x:xs) = x :> (fromList xs)
 
-simpl (x :| y) = fromList $ fixList $ map simpl $ (toList x) ++ toList y where
+simpl (x :| y) = fromList $ fixList $ map simpl $ (toList x) ++ toList y 
+    where
     toList :: Reg c -> [Reg c]
     toList (x :| y) = (toList x) ++ (toList y)
     toList x = [x]
@@ -78,7 +84,8 @@ nullable (Lit x) = False
 equalsEps :: Reg c -> Bool
 equalsEps Eps = True
 equalsEps (x :> y) = equalsEps x && equalsEps y
-equalsEps (x :| y) = (epsx && epsy) || (epsx && emptyy) || (emptyx && epsy) where
+equalsEps (x :| y) = (epsx && epsy) || (epsx && emptyy) || (emptyx && epsy)
+    where
     emptyx = empty x
     emptyy = empty y
     epsx = equalsEps x
@@ -96,73 +103,81 @@ empty Empty = True
 empty r = False
 
 
--- simpl format has some properties:
--- both :> and :| "go to the right"
--- there are no Eps in :>
--- there are no Many Empty
--- tere are no Many Eps
 der :: Eq c => c -> Reg c -> Reg c
 der c r = cutFirst c $ simpl r
 cutFirst :: Eq c => c -> Reg c -> Reg c
 cutFirst c Empty = Empty
 cutFirst c Eps = Empty
-cutFirst c (Lit x) = Empty
+cutFirst c (Lit x)
+    | c==x = Eps
+    | otherwise = Empty
 cutFirst c (Many x)
     | equalsEps cutx = Many x
-    | nullable cutx = cutx :> (Many x)
-    | otherwise = Empty where
-    cutx = cutFirst c x
-cutFirst c (x :| y) = simpl $ cutFirst c x :| (cutFirst c y)
-cutFirst c (x :> y)
-    | equalsEps cutx = y
-    | nullable cutx = cutx :> y
+    | not $ empty cutx = cutx :> (Many x)
     | otherwise = Empty
-    where
-    cutx = cutFirst c x
+        where
+        cutx = cutFirst c x
+cutFirst c (x :| y) = cutFirst c x :| (cutFirst c y)
+cutFirst c (x :> y)
+    | nullable x = (cutFirst c y) :| (cutx :> y)
+    | empty cutx = Empty
+    | otherwise = cutx :> y
+        where
+        cutx = cutFirst c x
 
--- foldl czy foldr
--- posprawdzac funkcje, ktore nie maja eq, wiec nie sa simply
 ders :: Eq c => [c] -> Reg c -> Reg c
-ders l r = simpl $ foldl (flip der) r l
+ders l r = foldr der r l
 
 accepts :: Eq c => Reg c -> [c] -> Bool
 accepts r [] = nullable r
-accepts r w = nullable $ ders y x
-    where 
-    x = r
-    y = w
+accepts r w = nullable $ ders w r
 
+---
+--
 mayStart :: Eq c => c -> Reg c -> Bool
 mayStart c r = not $ empty $ der c r
 
+sufixes :: Eq c => [c] -> [[c]]
+sufixes [] = [[]]
+sufixes l@(x:xs) = l:(sufixes xs)
+
+tryAccepts r w
+    | accepts r w = Just w
+    | otherwise = Nothing
+
 match :: Eq c => Reg c -> [c] -> Maybe [c]
-match r w
-    | found /= [] = Just found
+match r []
     | nullable r = Just []
     | otherwise = Nothing
+match r (c:cs) = case match derc cs of
+    Just rest -> Just $ c:rest
+    Nothing -> if nullable r then Just [] else Nothing
     where
-    found = match' r w
+        derc = der c r
 
-match' :: Eq c => Reg c -> [c] -> [c]
-match' r [] = []
-match' r (x:xs)
-    | nullable reduced = x:(match' reduced xs)
-    | otherwise = [] where
-            reduced = der x r
+firstLongest :: Eq c => [Maybe [c]] -> Maybe [c]
+firstLongest [] = Nothing
+firstLongest (Nothing:ll) = firstLongest ll
+firstLongest ((Just fl):ll) = case firstLongest ll of
+    Nothing -> Just fl
+    Just lx -> if (length fl) >= (length lx) then Just fl else Just lx
 
-suffixes :: Eq c => [c] -> [[c]]
-suffixes [] = [[]]
-suffixes l = l : (tails (tail l))
+firstSomething :: Eq c => [Maybe [c]] -> Maybe [c]
+firstSomething [] = Nothing
+firstSomething (Nothing:xs) = firstSomething xs
+firstSomething ((Just x):_) = Just x
 
-search :: Eq c => Reg c -> [c] -> Maybe [c]
-search r w = foldl (sumMaybe) Nothing $ map (match r) (suffixes w) where
-    sumMaybe Nothing l = l
-    sumMaybe l Nothing = l
-    sumMaybe (Just l1) (Just l2) = Just (l1 ++ l2)
+search r w = firstSomething $ map (match r) $ sufixes w
 
+cleanIncluded [] _ = []
+cleanIncluded (Nothing:ls) expected = cleanIncluded ls (expected-1)
+cleanIncluded ((Just l):ls) expected
+    | llen >= expected = l : (cleanIncluded ls llen)
+    | otherwise = cleanIncluded ls $ expected - 1
+    where
+        llen = length l
 
-findall :: Eq c => Reg c -> [c] -> [[c]]
-findall r w = []
+findall r w = cleanIncluded (map (match r) $ sufixes w) 0
 
 ---
 
